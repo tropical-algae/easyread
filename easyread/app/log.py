@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -17,7 +18,8 @@ def setup(path: Path) -> Path:
     fh = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
     fh.setFormatter(fmt)
     log.addHandler(fh)
-    if sys.stderr is not None and getattr(sys.stderr, "name", "") != "nul" and sys.stderr.isatty():
+    stderr_enabled = os.environ.get("EASYREAD_LOG_STDERR", "").strip().lower() in ("1", "true", "yes", "on")
+    if sys.stderr is not None and getattr(sys.stderr, "name", "") != "nul" and (sys.stderr.isatty() or stderr_enabled):
         sh = logging.StreamHandler(sys.stderr)
         sh.setFormatter(fmt)
         log.addHandler(sh)

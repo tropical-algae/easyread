@@ -1,4 +1,4 @@
-"""本地服务：只监听 127.0.0.1。文献库页、阅读页、数据接口、导入、后台任务。"""
+"""EasyRead HTTP 服务：文献库页、阅读页、数据接口、导入和后台任务。"""
 from __future__ import annotations
 
 import json
@@ -286,9 +286,12 @@ class Handler(BaseHTTPRequestHandler):
     def _presence(self):
         """页面开着就一直连着这条 WebSocket；断开就是页面关了（见 presence.py）。"""
         host = self.headers.get("Host") or ""
-        if self.headers.get("Origin") not in (None, f"http://{host}"):  # 别的网站不能来占着
-            self.close_connection = True
-            return self._json(403, {"error": "bad origin"})
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            parsed = urlparse(origin)
+            if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != host.lower():  # 别的网站不能来占着
+                self.close_connection = True
+                return self._json(403, {"error": "bad origin"})
         p = self.app.presence
         self.app.location.enter_page()
         try:

@@ -1,6 +1,6 @@
 """命令行。给人用，也给对话里的 agent 用（它在对话里翻译、追加讨论时走这些命令）。
 
-  easyread serve [--open] [--port N] [--exit-on-close]   启动（或复用已在跑的）服务
+  easyread serve [--open] [--host HOST] [--port N] [--exit-on-close]   启动（或复用已在跑的）服务
   easyread list                           列出文献库
   easyread import 论文.pdf|arXiv编号 [--no-translate] [--link]
   easyread translate ID [--pages 3-5]     排队翻译（需要服务在跑；否则直接前台译）
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import urllib.request
@@ -59,7 +60,8 @@ def running_server() -> str | None:
 
 
 def cmd_serve(a):
-    url = None if (a.port is not None or config.temp_library()) else running_server()
+    custom_host = a.host is not None or bool(os.environ.get("EASYREAD_HOST"))
+    url = None if (a.port is not None or custom_host or config.temp_library()) else running_server()
     if url:
         out(f"服务已在运行：{url}")
         if not a.exit_on_close:  # 要常驻的服务：那个服务若是 start.cmd 起的、关页会退出，让它改成常驻
@@ -73,7 +75,7 @@ def cmd_serve(a):
             webbrowser.open(url)
         return
     from ..server.launch import serve
-    serve(a.port, a.open, exit_on_close=a.exit_on_close)
+    serve(a.port, a.open, exit_on_close=a.exit_on_close, host=a.host)
 
 
 def cmd_list(a):
@@ -225,6 +227,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="easyread", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("serve"); p.add_argument("--open", action="store_true"); p.add_argument("--port", type=int)
+    p.add_argument("--host", help="监听地址（默认 127.0.0.1；容器中可设为 0.0.0.0）")
     p.add_argument("--exit-on-close", action="store_true", help="页面都关了、后台任务做完后自动退出（start.cmd / start.sh 用）")
     p.set_defaults(fn=cmd_serve)
     p = sub.add_parser("list"); p.set_defaults(fn=cmd_list)

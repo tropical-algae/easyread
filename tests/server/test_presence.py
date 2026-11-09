@@ -96,6 +96,11 @@ class ServerExitTest(unittest.TestCase):
         s.close()
         self.assertIn(b"403", resp.split(b"\r\n")[0])
 
+    def test_https_origin_with_same_host_is_allowed(self):
+        s, resp = _ws_connect(self.port, f"https://127.0.0.1:{self.port}")
+        self.assertIn(b"101", resp.split(b"\r\n")[0])
+        s.close()
+
     def test_keep_turns_off_auto_exit(self):
         import json
         import urllib.request

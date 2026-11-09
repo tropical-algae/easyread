@@ -125,6 +125,16 @@ easyread
 
 浏览器会打开 `http://127.0.0.1:8765`。服务只监听本机。
 
+### Linux Docker
+
+Docker 部署使用持久化的 `/data` 数据卷，默认只发布到宿主机 `127.0.0.1:8765`：
+
+```bash
+docker compose up -d
+```
+
+公网或局域网访问必须额外考虑身份认证；不要直接暴露没有认证的 EasyRead 服务。镜像构建、反向代理、模型连接、备份与更新说明见 [Linux Docker 部署](docs/docker.md)。
+
 ## 桌面版（Electron）
 
 桌面版复用同一套本地 Python 服务和 Web 界面，由 Electron 负责启动服务并显示窗口。开发环境需要 Node.js 22+、Python 3.10+ 和 PyInstaller：

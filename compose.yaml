@@ -1,0 +1,20 @@
+name: easyread
+
+services:
+  easyread:
+    image: ${EASYREAD_IMAGE:-tropicalalgae/easyread:latest}
+    restart: unless-stopped
+    ports:
+      - "${EASYREAD_BIND:-127.0.0.1}:${EASYREAD_PORT:-8765}:8765"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - easyread-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  easyread-data:

@@ -1,0 +1,131 @@
+name: Publish Docker Image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Docker Image
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Setup | Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup | Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Setup | Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Check | Project Version
+        id: version
+        shell: bash
+        run: |
+          version="$(python scripts/project_version.py)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "EasyRead version: ${version}"
+
+      - name: Setup | Python Dependencies
+        run: python -m pip install .
+
+      - name: Check | Container Runtime Tests
+        run: python -m unittest tests.app.test_container_runtime tests.app.test_project_version tests.server.test_presence -v
+
+      - name: Check | HTTPS Presence Transport
+        run: node --test tests/web/test_presence_transport.cjs
+
+      - name: Setup | Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build | Smoke Image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: easyread-container-smoke:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check | Container Smoke Test
+        shell: bash
+        run: |
+          docker volume create easyread-container-smoke-data
+          docker run --detach --name easyread-container-smoke \
+            --publish 127.0.0.1:18765:8765 \
+            --volume easyread-container-smoke-data:/data \
+            easyread-container-smoke:${{ steps.version.outputs.version }}
+          python scripts/smoke_container.py \
+            --url http://127.0.0.1:18765 \
+            --version "${{ steps.version.outputs.version }}"
+
+      - name: Check | Container Logs on Failure
+        if: failure()
+        run: docker logs easyread-container-smoke || true
+
+      - name: Cleanup | Smoke Container
+        if: always()
+        run: |
+          docker rm --force easyread-container-smoke 2>/dev/null || true
+          docker volume rm easyread-container-smoke-data 2>/dev/null || true
+
+  publish:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    environment: release
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Setup | Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup | Docker QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Setup | Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Setup | Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Setup | Docker Metadata
+        id: docker_meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/easyread
+          tags: |
+            type=raw,value=${{ needs.validate.outputs.version }}
+            type=raw,value=latest
+
+      - name: Publish | Build and Push Docker Image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

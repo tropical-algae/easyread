@@ -2,11 +2,12 @@
    用 start.cmd / start.sh 启动时，页面都关了、后台任务也做完了，服务会自己退出（见 easyread/server/presence.py）。 */
 (function () {
   "use strict";
-  if (location.protocol !== "http:" || typeof WebSocket === "undefined") return;
+  if (!["http:", "https:"].includes(location.protocol) || typeof WebSocket === "undefined") return;
+  const protocol = location.protocol === "https:" ? "wss://" : "ws://";
   let retries = 0;
   function connect() {
     let ws;
-    try { ws = new WebSocket("ws://" + location.host + "/api/presence"); } catch (e) { return; }
+    try { ws = new WebSocket(protocol + location.host + "/api/presence"); } catch (e) { return; }
     ws.onopen = () => { retries = 0; };
     ws.onclose = () => { retries += 1; setTimeout(connect, Math.min(30000, 1000 * retries)); };  // 断了就重连（服务重启过）
   }
